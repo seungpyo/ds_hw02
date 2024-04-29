@@ -61,7 +61,9 @@ def build(data, label_feature_name, feature_info):
     classes_of_data = split_data(data, label_feature_name, feature_info)
     for c, d in classes_of_data.items():
         if len(d) == len(data):
-            return None
+            return {
+                "class": c,
+            }
     entropy = get_entropy(data, label_feature_name, feature_info)
     gain_ratio_by_feature = {}
     for feature_name in feature_info.keys():
@@ -97,6 +99,19 @@ def build(data, label_feature_name, feature_info):
     }
 
 
+def classify(tree, record):
+    if tree is None:
+        return None
+    if "class" in tree:
+        return tree["class"]
+    feature = tree["feature"]
+    splits = tree["splits"]
+    if record[feature] not in splits:
+        return None
+    subtree = splits[record[feature]]
+    return classify(subtree, record)
+
+
 if __name__ == "__main__":
     assert len(sys.argv) == 4
     training_file = sys.argv[1]
@@ -107,4 +122,14 @@ if __name__ == "__main__":
     train_feature_info = get_feature_info(training_data)
     tree = build(training_data, class_key, train_feature_info)
     print(tree)
-    test_data, _ = parse_file(test_file)
+    test_data, _ = parse_file(test_file, is_training=False)
+    test_classes = [classify(tree, record) for record in test_data]
+    result_lines = []
+    with open(test_file, "r") as f:
+        for i, line in enumerate(f):
+            if i == 0:
+                result_lines.append(f"{line.strip()}\t{class_key}")
+                continue
+            result_lines.append(f"{line.strip()}\t{test_classes[i-1]}")
+    with open(result_file, "w") as f:
+        f.write("\n".join(result_lines))
